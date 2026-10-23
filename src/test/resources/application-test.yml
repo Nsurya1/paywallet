@@ -1,13 +1,18 @@
 spring:
   application:
     name: paywallet-test
+  datasource:
+    hikari:
+      maximum-pool-size: 60
+      minimum-idle: 10
+      connection-timeout: 30000
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         jdbc:
           time_zone: UTC
   flyway:
@@ -32,5 +37,5 @@ management:
 logging:
   level:
     root: INFO
-    com.paywallet: DEBUG
+    com.paywallet: INFO
     org.testcontainers: INFO

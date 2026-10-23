@@ -46,9 +46,8 @@ public class Wallet {
     @Column(name = "balance", nullable = false)
     private long balance;
 
-    @Version
     @Column(name = "version", nullable = false)
-    private Long version;
+    private Long version = 0L;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
