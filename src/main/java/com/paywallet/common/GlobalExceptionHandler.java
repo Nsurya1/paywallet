@@ -2,6 +2,7 @@ package com.paywallet.common;
 
 import com.paywallet.common.exception.BusinessException;
 import com.paywallet.common.exception.ResourceNotFoundException;
+import com.paywallet.wallet.exception.WalletAccessDeniedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,21 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(WalletAccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleWalletAccessDenied(
+            WalletAccessDeniedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Wallet access denied: {} at path: {}", ex.getMessage(), request.getRequestURI());
+        ApiErrorResponse response = ApiErrorResponse.of(
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
     @ExceptionHandler(BusinessException.class)
