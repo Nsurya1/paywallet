@@ -44,8 +44,11 @@ public class TransferService {
 
     /**
      * Executes a peer-to-peer wallet transfer in a single @Transactional boundary.
-     * Note: Executed with plain @Transactional first (no pessimistic / distributed locking)
-     * as requested in Step 5 to benchmark baseline transaction mechanics and behavior.
+     * Concurrency Safety:
+     *   1. Pessimistic Write Locking (PESSIMISTIC_WRITE / SELECT ... FOR UPDATE)
+     *      serializes balance updates and eliminates lost updates.
+     *   2. Deterministic Lock Ordering (sorting wallet UUIDs) eliminates the circular-wait
+     *      condition, mathematically preventing A->B / B->A transactional deadlocks.
      *
      * @param request the validated transfer request
      * @return the persisted transfer response
@@ -62,12 +65,24 @@ public class TransferService {
             );
         }
 
-        // 2. Load wallets without locking (standard findById)
-        Wallet fromWallet = walletRepository.findById(request.fromWalletId())
-                .orElseThrow(() -> new ResourceNotFoundException("Source wallet", request.fromWalletId()));
+        // 2. Deadlock-free pessimistic locking: Deterministically sort wallet UUIDs
+        // Always acquire lock on the lower UUID first, then the higher UUID second.
+        UUID firstId = request.fromWalletId().compareTo(request.toWalletId()) < 0
+                ? request.fromWalletId()
+                : request.toWalletId();
+        UUID secondId = request.fromWalletId().compareTo(request.toWalletId()) < 0
+                ? request.toWalletId()
+                : request.fromWalletId();
 
-        Wallet toWallet = walletRepository.findById(request.toWalletId())
-                .orElseThrow(() -> new ResourceNotFoundException("Destination wallet", request.toWalletId()));
+        Wallet firstWallet = walletRepository.findByIdForUpdate(firstId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet", firstId));
+
+        Wallet secondWallet = walletRepository.findByIdForUpdate(secondId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet", secondId));
+
+        // Re-assign semantic roles based on request
+        Wallet fromWallet = request.fromWalletId().equals(firstWallet.getId()) ? firstWallet : secondWallet;
+        Wallet toWallet = request.toWalletId().equals(firstWallet.getId()) ? firstWallet : secondWallet;
 
         // 3. Validation: caller must be the owner of the source wallet
         if (!fromWallet.getUserId().equals(currentUserId)) {
