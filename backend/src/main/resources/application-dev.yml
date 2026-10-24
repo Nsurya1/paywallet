@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/paywallet
-    username: paywallet
-    password: paywallet_secret
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/paywallet}
+    username: ${DB_USER:paywallet}
+    password: ${DB_PASSWORD:paywallet_secret}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -16,6 +16,8 @@ spring:
       host: localhost
       port: 6379
       timeout: 2000ms
+      repositories:
+        enabled: false
   kafka:
     bootstrap-servers: localhost:9092
     producer:

@@ -6,12 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/auth': 'http://localhost:8080',
-      '/wallets': 'http://localhost:8080',
-      '/transfers': 'http://localhost:8080',
-      '/webhooks': 'http://localhost:8080',
-      '/recon': 'http://localhost:8080',
-      '/actuator': 'http://localhost:8080',
+      '/auth': 'http://localhost:8085',
+      '/wallets': 'http://localhost:8085',
+      '/transfers': 'http://localhost:8085',
+      '/webhooks': 'http://localhost:8085',
+      '/recon': 'http://localhost:8085',
+      '/actuator': 'http://localhost:8085',
     },
   },
   test: {

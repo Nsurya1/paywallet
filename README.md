@@ -131,7 +131,7 @@ cd backend
 # Linux / macOS
 ./mvnw spring-boot:run
 ```
-*The Spring Boot server starts on port `8080`. Flyway executes database migrations `V1` through `V5` automatically.*
+*The Spring Boot server starts on port `8085`. Flyway executes database migrations `V1` through `V5` automatically.*
 
 ### 3. Run the Frontend Single-Page App
 In a separate terminal:
@@ -141,12 +141,12 @@ cd frontend
 npm install
 npm run dev
 ```
-*The React SPA starts on `http://localhost:5173` with Vite HMR, proxying `/auth`, `/wallets`, `/transfers`, `/webhooks` directly to the backend.*
+*The React SPA starts on `http://localhost:5173` with Vite HMR, proxying `/auth`, `/wallets`, `/transfers`, `/webhooks` directly to the backend on `:8085`.*
 
 ### 4. Verify Health & Developer Portals
 - **Frontend SPA**: [http://localhost:5173](http://localhost:5173)
-- **OpenAPI Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-- **Prometheus Metrics**: [http://localhost:8080/actuator/prometheus](http://localhost:8080/actuator/prometheus)
+- **OpenAPI Swagger UI**: [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html)
+- **Prometheus Metrics**: [http://localhost:8085/actuator/prometheus](http://localhost:8085/actuator/prometheus)
 - **Grafana Dashboard**: [http://localhost:3001](http://localhost:3001) (`admin` / `admin`)
   - Auto-provisioned: **PayWallet - High-Concurrency Ledger & Observability**
 

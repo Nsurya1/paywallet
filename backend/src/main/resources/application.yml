@@ -3,6 +3,10 @@ spring:
     name: paywallet
   profiles:
     active: dev
+  data:
+    redis:
+      repositories:
+        enabled: false
   jpa:
     open-in-view: false
     hibernate:
@@ -31,7 +35,7 @@ spring:
       enable-auto-commit: true
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8085}
   shutdown: graceful
 
 management:
