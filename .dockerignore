@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+*.iml
+.vscode
+target/
+*.log
+docker/data/
+docker-compose.override.yml
+k6/
+.github/
+README.md
