@@ -7,10 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
-    name: Build & Integration Tests (Testcontainers)
+  backend-test:
+    name: Backend Build & Integration Tests (Testcontainers)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
       - name: Checkout Code
@@ -47,12 +50,40 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-test-reports
-          path: target/surefire-reports/
+          path: backend/target/surefire-reports/
           retention-days: 14
+
+  frontend-test:
+    name: Frontend Build & Unit Tests (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Vitest Suite
+        run: npm test
+
+      - name: Build Production Assets
+        run: npm run build
 
   docker-build:
     name: Build & Verify Docker Container
-    needs: build-and-test
+    needs: [backend-test, frontend-test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -64,8 +95,8 @@ jobs:
       - name: Build Application Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: false
           tags: paywallet/paywallet:latest
           cache-from: type=gha
