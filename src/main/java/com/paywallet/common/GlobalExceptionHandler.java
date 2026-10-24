@@ -2,6 +2,9 @@ package com.paywallet.common;
 
 import com.paywallet.common.exception.BusinessException;
 import com.paywallet.common.exception.ResourceNotFoundException;
+import com.paywallet.idempotency.exception.IdempotencyConflictException;
+import com.paywallet.idempotency.exception.IdempotencyPayloadMismatchException;
+import com.paywallet.idempotency.exception.InvalidIdempotencyKeyException;
 import com.paywallet.wallet.exception.WalletAccessDeniedException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -75,6 +78,51 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidIdempotencyKey(
+            InvalidIdempotencyKeyException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Invalid idempotency key: {} at path: {}", ex.getMessage(), request.getRequestURI());
+        ApiErrorResponse response = ApiErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                "INVALID_IDEMPOTENCY_KEY",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleIdempotencyConflict(
+            IdempotencyConflictException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Idempotency conflict for key: {} at path: {}", ex.getIdemKey(), request.getRequestURI());
+        ApiErrorResponse response = ApiErrorResponse.of(
+                HttpStatus.CONFLICT.value(),
+                "IDEMPOTENCY_CONFLICT",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyPayloadMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleIdempotencyPayloadMismatch(
+            IdempotencyPayloadMismatchException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Idempotency payload mismatch for key: {} at path: {}", ex.getIdemKey(), request.getRequestURI());
+        ApiErrorResponse response = ApiErrorResponse.of(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "IDEMPOTENCY_PAYLOAD_MISMATCH",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
     }
 
     @ExceptionHandler(BusinessException.class)

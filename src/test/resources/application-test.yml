@@ -49,3 +49,6 @@ paywallet:
       multiplier: 1.5
       max-backoff-ms: 80
       jitter-ratio: 0.5
+  idempotency:
+    in-flight-wait-timeout-ms: 10000
+    cleanup-delay-ms: 3600000

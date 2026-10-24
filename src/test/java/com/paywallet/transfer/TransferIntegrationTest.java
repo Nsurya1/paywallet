@@ -86,6 +86,7 @@ class TransferIntegrationTest extends BaseIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Idempotency-Key", UUID.randomUUID().toString());
         return headers;
     }
 

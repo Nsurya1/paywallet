@@ -1,5 +1,6 @@
 package com.paywallet.transfer.controller;
 
+import com.paywallet.idempotency.annotation.Idempotent;
 import com.paywallet.transfer.dto.TransferRequest;
 import com.paywallet.transfer.dto.TransferResponse;
 import com.paywallet.transfer.service.TransferService;
@@ -26,6 +27,7 @@ public class TransferController {
     }
 
     @PostMapping
+    @Idempotent
     @Operation(
             summary = "Transfer funds between wallets",
             description = "Atomically debits source wallet, credits destination wallet, creates a transaction record, and inserts double-entry ledger entries within a single database transaction"

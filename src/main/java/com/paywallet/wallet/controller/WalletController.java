@@ -1,5 +1,6 @@
 package com.paywallet.wallet.controller;
 
+import com.paywallet.idempotency.annotation.Idempotent;
 import com.paywallet.transfer.domain.TransactionType;
 import com.paywallet.transfer.dto.TransactionResponse;
 import com.paywallet.transfer.service.TransferService;
@@ -70,6 +71,7 @@ public class WalletController {
     }
 
     @PostMapping("/{id}/topup")
+    @Idempotent
     @Operation(summary = "Top up wallet balance", description = "Simulates payment gateway deposit, crediting the wallet and writing an immutable ledger entry")
     public ResponseEntity<TopUpResponse> topUp(
             @PathVariable UUID id,
