@@ -19,6 +19,19 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: paywallet-test-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true
 
 management:
   endpoints:
@@ -52,3 +65,22 @@ paywallet:
   idempotency:
     in-flight-wait-timeout-ms: 10000
     cleanup-delay-ms: 3600000
+  kafka:
+    topic:
+      wallet-events: wallet.events
+      auto-create: false
+    consumer:
+      enabled: true
+      auto-startup: false
+  outbox:
+    publisher:
+      enabled: false
+      delay-ms: 200
+      batch-size: 50
+      max-retries: 3
+      send-timeout-ms: 3000
+  recon:
+    scheduler:
+      enabled: false
+    cron: "0 0 0 * * *"
+    auto-freeze-on-discrepancy: false
