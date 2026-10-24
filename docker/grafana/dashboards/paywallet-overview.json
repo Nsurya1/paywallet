@@ -1,0 +1,210 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Throughput & Transfer Concurrency",
+      "type": "row"
+    },
+    {
+      "title": "Application Throughput (Requests / Sec)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (uri)",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Transfer Success vs Failure Rate",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(transfer_success_total[1m]))",
+          "legendFormat": "Transfers Succeeded",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(transfer_failure_total[1m]))",
+          "legendFormat": "Transfers Failed",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Optimistic Locking Retries / Sec",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(transfer_lock_retries_total[1m]))",
+          "legendFormat": "Lock Retries / sec",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "Latency Percentiles (p50, p95, p99)",
+      "type": "row"
+    },
+    {
+      "title": "Transfer Endpoint Latency Percentiles",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri=\"/transfers\"}[1m])) by (le))",
+          "legendFormat": "p99 Latency (s)",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=\"/transfers\"}[1m])) by (le))",
+          "legendFormat": "p95 Latency (s)",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{uri=\"/transfers\"}[1m])) by (le))",
+          "legendFormat": "p50 Latency (s)",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "title": "HikariCP Database Connection Pool",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{pool=\"HikariPool-1\"}",
+          "legendFormat": "Active Connections",
+          "refId": "A"
+        },
+        {
+          "expr": "hikaricp_connections_idle{pool=\"HikariPool-1\"}",
+          "legendFormat": "Idle Connections",
+          "refId": "B"
+        },
+        {
+          "expr": "hikaricp_connections_pending{pool=\"HikariPool-1\"}",
+          "legendFormat": "Pending Threads Waiting for Connection",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "title": "Ledger Reconciliation & Resilience4j Circuit Breakers",
+      "type": "row"
+    },
+    {
+      "title": "Total Reconciled Wallets & Discrepancies",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 19 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "recon_wallets_audited_total",
+          "legendFormat": "Total Wallets Audited",
+          "refId": "A"
+        },
+        {
+          "expr": "recon_discrepancies_total",
+          "legendFormat": "Discrepancies Detected",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Resilience4j Webhook Circuit Breaker State",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 19 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "resilience4j_circuitbreaker_state{name=\"webhookService\",state=\"closed\"}",
+          "legendFormat": "State: CLOSED (Healthy)",
+          "refId": "A"
+        },
+        {
+          "expr": "resilience4j_circuitbreaker_state{name=\"webhookService\",state=\"open\"}",
+          "legendFormat": "State: OPEN (Failing Fast)",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "JVM Heap Memory Usage",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 19 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Used",
+          "refId": "A"
+        },
+        {
+          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Max",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["paywallet", "concurrency", "spring-boot", "ledger"],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m"]
+  },
+  "timezone": "browser",
+  "title": "PayWallet - High-Concurrency Ledger & Observability",
+  "uid": "paywallet-observability-dashboard",
+  "version": 1
+}

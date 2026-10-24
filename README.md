@@ -97,4 +97,40 @@ Integration tests leverage Testcontainers to spin up isolated PostgreSQL instanc
 ---
 
 ## 📊 Benchmarks & Concurrency Metrics
-*(Benchmark results captured via k6 load tests will be recorded here in subsequent steps.)*
+
+PayWallet includes a distributed load testing suite powered by [k6](https://k6.io/) located in [`k6/`](file:///D:/projects/PayWallet/k6).
+
+### 1. High-Throughput Transfer Benchmark (`k6/transfer_load_test.js`)
+- **Workload**: 100 concurrent Virtual Users executing non-conflicting and conflicting funds transfers across randomly selected wallet pairs.
+- **Invariants Checked**:
+  - `p95` latency < 500ms
+  - `p99` latency < 1,000ms
+  - Error rate < 1%
+  - Automated post-run ledger reconciliation via `POST /recon/run` ($\sum \text{Debits} == \sum \text{Credits}$).
+
+```bash
+k6 run k6/transfer_load_test.js
+```
+
+### 2. High-Concurrency Idempotency Race (`k6/idempotency_stress_test.js`)
+- **Workload**: 50 concurrent Virtual Users sending the identical `Idempotency-Key` header simultaneously.
+- **Guarantee**: Exactly **one** top-up mutation executes; all subsequent requests safely return the cached response without double-crediting the balance.
+
+```bash
+k6 run k6/idempotency_stress_test.js
+```
+
+---
+
+## 📈 Observability & Grafana Dashboards
+
+The application exports Micrometer metrics scraped by Prometheus and rendered in Grafana:
+- **Actuator Prometheus Endpoint**: [http://localhost:8080/actuator/prometheus](http://localhost:8080/actuator/prometheus)
+- **Grafana Observability**: [http://localhost:3001](http://localhost:3001) (`admin` / `admin`)
+- **Pre-provisioned Dashboard**: **PayWallet - High-Concurrency Ledger & Observability**
+  - Real-time RPS & HTTP request breakdown
+  - p50, p95, p99 latency percentiles
+  - Optimistic locking retries & Pessimistic lock durations
+  - HikariCP connection pool utilization (Active, Idle, Pending)
+  - Resilience4j Circuit Breaker states (`CLOSED` vs `OPEN`)
+  - End-of-Day reconciliation status & ledger discrepancy counts
