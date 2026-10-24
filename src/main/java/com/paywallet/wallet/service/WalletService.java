@@ -5,6 +5,8 @@ import com.paywallet.common.exception.BusinessException;
 import com.paywallet.common.exception.ResourceNotFoundException;
 import com.paywallet.ledger.domain.LedgerEntry;
 import com.paywallet.ledger.repository.LedgerEntryRepository;
+import com.paywallet.outbox.event.WalletToppedUpEvent;
+import com.paywallet.outbox.service.OutboxService;
 import com.paywallet.transfer.domain.Transaction;
 import com.paywallet.transfer.domain.TransactionStatus;
 import com.paywallet.transfer.domain.TransactionType;
@@ -28,15 +30,18 @@ public class WalletService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final OutboxService outboxService;
 
     public WalletService(
             WalletRepository walletRepository,
             TransactionRepository transactionRepository,
-            LedgerEntryRepository ledgerEntryRepository
+            LedgerEntryRepository ledgerEntryRepository,
+            OutboxService outboxService
     ) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
+        this.outboxService = outboxService;
     }
 
     @Transactional
@@ -102,6 +107,23 @@ public class WalletService {
 
         // 4. Persist updated wallet balance
         Wallet updatedWallet = walletRepository.save(wallet);
+
+        // 5. Record transactional outbox event
+        outboxService.recordEvent(
+                "WALLET",
+                updatedWallet.getId().toString(),
+                "WALLET_TOPPED_UP",
+                new WalletToppedUpEvent(
+                        UUID.randomUUID(),
+                        updatedWallet.getId(),
+                        updatedWallet.getUserId(),
+                        request.amount(),
+                        updatedWallet.getCurrency(),
+                        updatedWallet.getBalance(),
+                        savedTxn.getReferenceId(),
+                        savedTxn.getCreatedAt()
+                )
+        );
 
         return new TopUpResponse(
                 savedTxn.getId(),

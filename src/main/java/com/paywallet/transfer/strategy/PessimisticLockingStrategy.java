@@ -4,6 +4,8 @@ import com.paywallet.common.exception.BusinessException;
 import com.paywallet.common.exception.ResourceNotFoundException;
 import com.paywallet.ledger.domain.LedgerEntry;
 import com.paywallet.ledger.repository.LedgerEntryRepository;
+import com.paywallet.outbox.event.WalletTransferredEvent;
+import com.paywallet.outbox.service.OutboxService;
 import com.paywallet.transfer.domain.Transaction;
 import com.paywallet.transfer.domain.TransactionStatus;
 import com.paywallet.transfer.domain.TransactionType;
@@ -26,17 +28,20 @@ public class PessimisticLockingStrategy implements TransferLockingStrategy {
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
     private final TransferMetrics metrics;
+    private final OutboxService outboxService;
 
     public PessimisticLockingStrategy(
             WalletRepository walletRepository,
             TransactionRepository transactionRepository,
             LedgerEntryRepository ledgerEntryRepository,
-            TransferMetrics metrics
+            TransferMetrics metrics,
+            OutboxService outboxService
     ) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.metrics = metrics;
+        this.outboxService = outboxService;
     }
 
     @Override
@@ -134,6 +139,23 @@ public class PessimisticLockingStrategy implements TransferLockingStrategy {
 
             ledgerEntryRepository.save(debitEntry);
             ledgerEntryRepository.save(creditEntry);
+
+            // 8. Record transactional outbox event
+            outboxService.recordEvent(
+                    "WALLET",
+                    fromWallet.getId().toString(),
+                    "WALLET_TRANSFERRED",
+                    new WalletTransferredEvent(
+                            UUID.randomUUID(),
+                            savedTx.getId(),
+                            savedTx.getReferenceId(),
+                            fromWallet.getId(),
+                            toWallet.getId(),
+                            request.amount(),
+                            fromWallet.getCurrency(),
+                            savedTx.getCreatedAt()
+                    )
+            );
 
             metrics.recordSuccess("pessimistic", System.nanoTime() - startTime);
             return TransferResponse.from(savedTx);
