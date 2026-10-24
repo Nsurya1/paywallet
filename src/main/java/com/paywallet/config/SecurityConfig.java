@@ -57,7 +57,8 @@ public class SecurityConfig {
                                 "/actuator/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html"
+                                "/swagger-ui.html",
+                                "/test/**"
                         ).permitAll()
                         // Protected Endpoints
                         .anyRequest().authenticated()

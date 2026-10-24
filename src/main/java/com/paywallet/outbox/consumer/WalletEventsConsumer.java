@@ -26,14 +26,20 @@ public class WalletEventsConsumer {
 
     private final ConsumedEventRepository consumedEventRepository;
     private final ObjectMapper objectMapper;
+    private final com.paywallet.notification.service.NotificationService notificationService;
 
     // In-memory monitoring hooks for testing and observability
     private final List<OutboxMessage> consumedEventsList = new CopyOnWriteArrayList<>();
     private final AtomicInteger duplicateDetections = new AtomicInteger(0);
 
-    public WalletEventsConsumer(ConsumedEventRepository consumedEventRepository, ObjectMapper objectMapper) {
+    public WalletEventsConsumer(
+            ConsumedEventRepository consumedEventRepository,
+            ObjectMapper objectMapper,
+            com.paywallet.notification.service.NotificationService notificationService
+    ) {
         this.consumedEventRepository = consumedEventRepository;
         this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
     }
 
     @KafkaListener(
@@ -58,6 +64,7 @@ public class WalletEventsConsumer {
             // 2. Process event (business logic / notifications dispatch)
             log.info("Processing wallet event: eventId={} type={} aggregateId={} partition={} offset={}",
                     eventId, message.eventType(), message.aggregateId(), record.partition(), record.offset());
+            notificationService.dispatchToAllMatchingSubscriptions(eventId, message.eventType(), message.aggregateId(), message.payload());
 
             // 3. Record consumption atomically in PostgreSQL
             ConsumedEvent consumed = new ConsumedEvent(
