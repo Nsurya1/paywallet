@@ -1,18 +1,15 @@
 package com.paywallet.transfer.service;
 
 import com.paywallet.auth.security.SecurityUtils;
-import com.paywallet.common.exception.BusinessException;
 import com.paywallet.common.exception.ResourceNotFoundException;
-import com.paywallet.ledger.domain.LedgerEntry;
-import com.paywallet.ledger.repository.LedgerEntryRepository;
 import com.paywallet.transfer.domain.Transaction;
-import com.paywallet.transfer.domain.TransactionStatus;
 import com.paywallet.transfer.domain.TransactionType;
 import com.paywallet.transfer.dto.TransactionResponse;
 import com.paywallet.transfer.dto.TransferRequest;
 import com.paywallet.transfer.dto.TransferResponse;
 import com.paywallet.transfer.repository.TransactionRepository;
 import com.paywallet.transfer.specification.TransactionSpecifications;
+import com.paywallet.transfer.strategy.TransferLockingStrategy;
 import com.paywallet.wallet.domain.Wallet;
 import com.paywallet.wallet.exception.WalletAccessDeniedException;
 import com.paywallet.wallet.repository.WalletRepository;
@@ -28,123 +25,30 @@ import java.util.UUID;
 @Service
 public class TransferService {
 
+    private final TransferLockingStrategy lockingStrategy;
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
-    private final LedgerEntryRepository ledgerEntryRepository;
 
     public TransferService(
+            TransferLockingStrategy lockingStrategy,
             WalletRepository walletRepository,
-            TransactionRepository transactionRepository,
-            LedgerEntryRepository ledgerEntryRepository
+            TransactionRepository transactionRepository
     ) {
+        this.lockingStrategy = lockingStrategy;
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
-        this.ledgerEntryRepository = ledgerEntryRepository;
     }
 
     /**
-     * Executes a peer-to-peer wallet transfer in a single @Transactional boundary.
-     * Concurrency Safety:
-     *   1. Pessimistic Write Locking (PESSIMISTIC_WRITE / SELECT ... FOR UPDATE)
-     *      serializes balance updates and eliminates lost updates.
-     *   2. Deterministic Lock Ordering (sorting wallet UUIDs) eliminates the circular-wait
-     *      condition, mathematically preventing A->B / B->A transactional deadlocks.
+     * Executes a peer-to-peer wallet transfer using the configured locking strategy
+     * (Pessimistic Locking or Optimistic Locking with retry and backoff).
      *
      * @param request the validated transfer request
-     * @return the persisted transfer response
+     * @return the transfer response
      */
-    @Transactional
     public TransferResponse transfer(TransferRequest request) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-
-        // 1. Validation: cannot transfer to the same wallet
-        if (request.fromWalletId().equals(request.toWalletId())) {
-            throw new BusinessException(
-                    "INVALID_TRANSFER",
-                    "Cannot transfer funds to the same wallet"
-            );
-        }
-
-        // 2. Deadlock-free pessimistic locking: Deterministically sort wallet UUIDs
-        // Always acquire lock on the lower UUID first, then the higher UUID second.
-        UUID firstId = request.fromWalletId().compareTo(request.toWalletId()) < 0
-                ? request.fromWalletId()
-                : request.toWalletId();
-        UUID secondId = request.fromWalletId().compareTo(request.toWalletId()) < 0
-                ? request.toWalletId()
-                : request.fromWalletId();
-
-        Wallet firstWallet = walletRepository.findByIdForUpdate(firstId)
-                .orElseThrow(() -> new ResourceNotFoundException("Wallet", firstId));
-
-        Wallet secondWallet = walletRepository.findByIdForUpdate(secondId)
-                .orElseThrow(() -> new ResourceNotFoundException("Wallet", secondId));
-
-        // Re-assign semantic roles based on request
-        Wallet fromWallet = request.fromWalletId().equals(firstWallet.getId()) ? firstWallet : secondWallet;
-        Wallet toWallet = request.toWalletId().equals(firstWallet.getId()) ? firstWallet : secondWallet;
-
-        // 3. Validation: caller must be the owner of the source wallet
-        if (!fromWallet.getUserId().equals(currentUserId)) {
-            throw new WalletAccessDeniedException(
-                    String.format("You do not have permission to transfer from wallet '%s'", request.fromWalletId())
-            );
-        }
-
-        // 4. Validation: source and destination wallets must have identical currencies
-        if (!fromWallet.getCurrency().equalsIgnoreCase(toWallet.getCurrency())) {
-            throw new BusinessException(
-                    "CURRENCY_MISMATCH",
-                    String.format("Cross-currency transfer from %s to %s is not supported",
-                            fromWallet.getCurrency(), toWallet.getCurrency())
-            );
-        }
-
-        // 5. Update balances via rich domain methods (enforces active state, positive amount, and sufficient balance)
-        fromWallet.debit(request.amount());
-        toWallet.credit(request.amount());
-
-        walletRepository.save(fromWallet);
-        walletRepository.save(toWallet);
-
-        // 6. Insert 1 transaction row
-        String referenceId = "TRF-" + UUID.randomUUID();
-        Transaction transaction = new Transaction(
-                referenceId,
-                fromWallet.getId(),
-                toWallet.getId(),
-                request.amount(),
-                fromWallet.getCurrency(),
-                TransactionType.TRANSFER,
-                TransactionStatus.COMPLETED
-        );
-        Transaction savedTx = transactionRepository.save(transaction);
-
-        // 7. Insert 2 immutable ledger entries (debit from source, credit to destination with balance_after)
-        String description = (request.description() != null && !request.description().isBlank())
-                ? request.description()
-                : "Peer-to-peer wallet transfer";
-
-        LedgerEntry debitEntry = LedgerEntry.debit(
-                savedTx.getId(),
-                fromWallet.getId(),
-                request.amount(),
-                fromWallet.getBalance(),
-                description + " (Debit: to wallet " + toWallet.getId() + ")"
-        );
-
-        LedgerEntry creditEntry = LedgerEntry.credit(
-                savedTx.getId(),
-                toWallet.getId(),
-                request.amount(),
-                toWallet.getBalance(),
-                description + " (Credit: from wallet " + fromWallet.getId() + ")"
-        );
-
-        ledgerEntryRepository.save(debitEntry);
-        ledgerEntryRepository.save(creditEntry);
-
-        return TransferResponse.from(savedTx);
+        return lockingStrategy.transfer(request, currentUserId);
     }
 
     /**
@@ -176,5 +80,9 @@ public class TransferService {
 
         return transactionRepository.findAll(spec, pageable)
                 .map(TransactionResponse::from);
+    }
+
+    public String getActiveStrategyName() {
+        return lockingStrategy.getStrategyName();
     }
 }

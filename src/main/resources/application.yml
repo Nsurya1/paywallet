@@ -29,8 +29,8 @@ management:
   endpoint:
     health:
       show-details: always
-      probes:
-        enabled: true
+    probes:
+      enabled: true
   metrics:
     tags:
       application: ${spring.application.name}
@@ -46,3 +46,11 @@ paywallet:
   jwt:
     secret: ${PAYWALLET_JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
     expiration-minutes: 60
+  locking:
+    strategy: ${PAYWALLET_LOCKING_STRATEGY:pessimistic} # pessimistic | optimistic
+    optimistic:
+      max-retries: 25
+      initial-backoff-ms: 15
+      multiplier: 2.0
+      max-backoff-ms: 300
+      jitter-ratio: 0.5

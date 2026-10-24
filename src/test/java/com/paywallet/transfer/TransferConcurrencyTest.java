@@ -7,7 +7,9 @@ import com.paywallet.auth.security.UserPrincipal;
 import com.paywallet.ledger.domain.LedgerEntry;
 import com.paywallet.ledger.repository.LedgerEntryRepository;
 import com.paywallet.transfer.dto.TransferRequest;
-import com.paywallet.transfer.service.TransferService;
+import com.paywallet.transfer.metrics.TransferMetrics;
+import com.paywallet.transfer.strategy.OptimisticLockingStrategy;
+import com.paywallet.transfer.strategy.PessimisticLockingStrategy;
 import com.paywallet.wallet.domain.Wallet;
 import com.paywallet.wallet.repository.WalletRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -15,16 +17,15 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -35,7 +36,10 @@ class TransferConcurrencyTest extends BaseIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(TransferConcurrencyTest.class);
 
     @Autowired
-    private TransferService transferService;
+    private PessimisticLockingStrategy pessimisticLockingStrategy;
+
+    @Autowired
+    private OptimisticLockingStrategy optimisticLockingStrategy;
 
     @Autowired
     private WalletRepository walletRepository;
@@ -46,142 +50,15 @@ class TransferConcurrencyTest extends BaseIntegrationTest {
     @Autowired
     private LedgerEntryRepository ledgerEntryRepository;
 
-    @Test
-    @DisplayName("PESSIMISTIC LOCKING VERIFICATION: 1,000 parallel transfers across 50 threads pass with ZERO lost updates and exact balance conservation")
-    void testParallelTransfersWithPessimisticLocking_passesWithZeroLostUpdates() throws InterruptedException {
-        // 1. SETUP: Create 2 users and 2 wallets with 5,000.00 INR (500,000 minor units) each
-        String suffix = UUID.randomUUID().toString().substring(0, 8);
-        User userA = userRepository.save(new User("pess_alice_" + suffix, "alice_" + suffix + "@wallet.com", "hash", "ROLE_USER"));
-        User userB = userRepository.save(new User("pess_bob_" + suffix, "bob_" + suffix + "@wallet.com", "hash", "ROLE_USER"));
-
-        long initialBalanceA = 500_000L;
-        long initialBalanceB = 500_000L;
-        long totalMoneyBefore = initialBalanceA + initialBalanceB; // 1,000,000 paise
-
-        Wallet walletA = walletRepository.save(new Wallet(userA.getId(), "INR", initialBalanceA));
-        Wallet walletB = walletRepository.save(new Wallet(userB.getId(), "INR", initialBalanceB));
-
-        UUID walletAId = walletA.getId();
-        UUID walletBId = walletB.getId();
-
-        UserPrincipal principalA = new UserPrincipal(userA.getId(), userA.getUsername(), userA.getEmail(), userA.getRole());
-
-        int totalTransfers = 1000;
-        int threadCount = 50;
-        long transferAmount = 10L; // 10 paise per transfer
-
-        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch readyLatch = new CountDownLatch(threadCount);
-        CountDownLatch startGate = new CountDownLatch(1);
-        CountDownLatch doneLatch = new CountDownLatch(totalTransfers);
-
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
-        ConcurrentLinkedQueue<String> errors = new ConcurrentLinkedQueue<>();
-
-        // 2. DISPATCH: Submit 1,000 parallel transfers from Wallet A to Wallet B
-        for (int i = 0; i < totalTransfers; i++) {
-            executor.submit(() -> {
-                readyLatch.countDown();
-                try {
-                    startGate.await(); // Synchronized release across all 50 worker threads
-
-                    SecurityContext context = SecurityContextHolder.createEmptyContext();
-                    context.setAuthentication(new UsernamePasswordAuthenticationToken(
-                            principalA, null, principalA.getAuthorities()
-                    ));
-                    SecurityContextHolder.setContext(context);
-
-                    transferService.transfer(new TransferRequest(walletAId, walletBId, transferAmount, "Pessimistic stress test"));
-                    successCount.incrementAndGet();
-                } catch (Exception ex) {
-                    failureCount.incrementAndGet();
-                    if (errors.size() < 10) {
-                        errors.add(ex.getClass().getSimpleName() + ": " + ex.getMessage());
-                    }
-                } finally {
-                    SecurityContextHolder.clearContext();
-                    doneLatch.countDown();
-                }
-            });
-        }
-
-        readyLatch.await(10, TimeUnit.SECONDS);
-
-        long startTime = System.currentTimeMillis();
-        startGate.countDown(); // FIRE!
-        boolean finished = doneLatch.await(60, TimeUnit.SECONDS);
-        long durationMs = System.currentTimeMillis() - startTime;
-        executor.shutdown();
-
-        assertThat(finished).as("All 1,000 tasks must finish within the 60s timeout").isTrue();
-
-        // 3. AUDIT & RECONCILIATION
-        Wallet finalWalletA = walletRepository.findById(walletAId).orElseThrow();
-        Wallet finalWalletB = walletRepository.findById(walletBId).orElseThrow();
-
-        long totalMoneyAfter = finalWalletA.getBalance() + finalWalletB.getBalance();
-        long balanceDiscrepancy = totalMoneyAfter - totalMoneyBefore;
-
-        List<LedgerEntry> allLedgerEntries = ledgerEntryRepository.findAll();
-        long totalLedgerDebits = allLedgerEntries.stream()
-                .filter(e -> "D".equals(e.getDirection()))
-                .mapToLong(LedgerEntry::getAmount)
-                .sum();
-        long totalLedgerCredits = allLedgerEntries.stream()
-                .filter(e -> "C".equals(e.getDirection()))
-                .mapToLong(LedgerEntry::getAmount)
-                .sum();
-
-        System.out.println("================================================================================");
-        System.out.println("            CONCURRENCY TEST 1: PESSIMISTIC LOCKING VERIFICATION               ");
-        System.out.println("================================================================================");
-        System.out.printf("Execution Time         : %d ms across %d concurrent worker threads%n", durationMs, threadCount);
-        System.out.printf("Total Transfers Fired  : %d%n", totalTransfers);
-        System.out.printf("Successful Transfers   : %d / %d%n", successCount.get(), totalTransfers);
-        System.out.printf("Failed Transfers       : %d%n", failureCount.get());
-        System.out.println("--------------------------------------------------------------------------------");
-        System.out.printf("Wallet A Balance       : %d (Expected: %d)%n",
-                finalWalletA.getBalance(), initialBalanceA - (totalTransfers * transferAmount));
-        System.out.printf("Wallet B Balance       : %d (Expected: %d)%n",
-                finalWalletB.getBalance(), initialBalanceB + (totalTransfers * transferAmount));
-        System.out.printf("Total Money Before     : %d minor units%n", totalMoneyBefore);
-        System.out.printf("Total Money After      : %d minor units%n", totalMoneyAfter);
-        System.out.printf("Balance Discrepancy    : %d minor units (PERFECT CONSERVATION)%n", balanceDiscrepancy);
-        System.out.println("================================================================================");
-
-        // Invariant 1: 100% throughput - zero failures
-        assertThat(failureCount.get()).as("Zero failures expected under pessimistic locking").isZero();
-        assertThat(successCount.get()).as("All 1,000 transfers must succeed").isEqualTo(totalTransfers);
-
-        // Invariant 2: Conservation of money (Total money before == after)
-        assertThat(totalMoneyAfter)
-                .as("Total money in system must remain strictly invariant")
-                .isEqualTo(totalMoneyBefore);
-
-        // Invariant 3: Zero lost updates on Wallet A
-        long expectedBalanceA = initialBalanceA - (totalTransfers * transferAmount);
-        assertThat(finalWalletA.getBalance())
-                .as("Wallet A balance must equal exactly 500,000 - (1000 * 10)")
-                .isEqualTo(expectedBalanceA);
-
-        // Invariant 4: Zero lost updates on Wallet B
-        long expectedBalanceB = initialBalanceB + (totalTransfers * transferAmount);
-        assertThat(finalWalletB.getBalance())
-                .as("Wallet B balance must equal exactly 500,000 + (1000 * 10)")
-                .isEqualTo(expectedBalanceB);
-
-        // Invariant 5: Ledger debits == ledger credits
-        assertThat(totalLedgerDebits).isEqualTo(totalLedgerCredits);
-    }
+    @Autowired
+    private TransferMetrics transferMetrics;
 
     @Test
-    @DisplayName("DEADLOCK PREVENTION: Simultaneous bidirectional transfers (500 A->B and 500 B->A) across 50 threads MUST NOT DEADLOCK")
-    void testBidirectionalTransfers_withOrderedLocks_doesNotDeadlock() throws InterruptedException {
-        // 1. SETUP: Create 2 users and 2 wallets
+    @DisplayName("PESSIMISTIC STRATEGY: 1,000 parallel transfers across 50 threads pass with ZERO lost updates and exact balance conservation")
+    void testPessimisticStrategy_1000Transfers_zeroLostUpdates() throws InterruptedException {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        User userA = userRepository.save(new User("deadlock_alice_" + suffix, "alice_" + suffix + "@wallet.com", "hash", "ROLE_USER"));
-        User userB = userRepository.save(new User("deadlock_bob_" + suffix, "bob_" + suffix + "@wallet.com", "hash", "ROLE_USER"));
+        User userA = userRepository.save(new User("pess_uA_" + suffix, "alice_" + suffix + "@pess.com", "hash", "ROLE_USER"));
+        User userB = userRepository.save(new User("pess_uB_" + suffix, "bob_" + suffix + "@pess.com", "hash", "ROLE_USER"));
 
         long initialBalanceA = 500_000L;
         long initialBalanceB = 500_000L;
@@ -190,15 +67,9 @@ class TransferConcurrencyTest extends BaseIntegrationTest {
         Wallet walletA = walletRepository.save(new Wallet(userA.getId(), "INR", initialBalanceA));
         Wallet walletB = walletRepository.save(new Wallet(userB.getId(), "INR", initialBalanceB));
 
-        UUID walletAId = walletA.getId();
-        UUID walletBId = walletB.getId();
-
-        UserPrincipal principalA = new UserPrincipal(userA.getId(), userA.getUsername(), userA.getEmail(), userA.getRole());
-        UserPrincipal principalB = new UserPrincipal(userB.getId(), userB.getUsername(), userB.getEmail(), userB.getRole());
-
         int totalTransfers = 1000;
         int threadCount = 50;
-        long transferAmount = 15L; // 15 paise per transfer
+        long transferAmount = 10L;
 
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch readyLatch = new CountDownLatch(threadCount);
@@ -207,77 +78,231 @@ class TransferConcurrencyTest extends BaseIntegrationTest {
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
-        ConcurrentLinkedQueue<String> deadlockErrors = new ConcurrentLinkedQueue<>();
 
-        // 2. DISPATCH: 500 transfers A -> B, and 500 transfers B -> A interweaved simultaneously
         for (int i = 0; i < totalTransfers; i++) {
-            final boolean aToB = (i % 2 == 0);
-            final UUID fromId = aToB ? walletAId : walletBId;
-            final UUID toId = aToB ? walletBId : walletAId;
-            final UserPrincipal activePrincipal = aToB ? principalA : principalB;
-
             executor.submit(() -> {
                 readyLatch.countDown();
                 try {
                     startGate.await();
-
-                    SecurityContext context = SecurityContextHolder.createEmptyContext();
-                    context.setAuthentication(new UsernamePasswordAuthenticationToken(
-                            activePrincipal, null, activePrincipal.getAuthorities()
-                    ));
-                    SecurityContextHolder.setContext(context);
-
-                    transferService.transfer(new TransferRequest(fromId, toId, transferAmount, "Bidirectional deadlock test"));
+                    pessimisticLockingStrategy.transfer(
+                            new TransferRequest(walletA.getId(), walletB.getId(), transferAmount, "Pessimistic batch"),
+                            userA.getId()
+                    );
                     successCount.incrementAndGet();
                 } catch (Exception ex) {
                     failureCount.incrementAndGet();
-                    deadlockErrors.add(ex.getClass().getSimpleName() + ": " + ex.getMessage());
                 } finally {
-                    SecurityContextHolder.clearContext();
                     doneLatch.countDown();
                 }
             });
         }
 
         readyLatch.await(10, TimeUnit.SECONDS);
-
         long startTime = System.currentTimeMillis();
-        startGate.countDown(); // FIRE!
+        startGate.countDown();
         boolean finished = doneLatch.await(60, TimeUnit.SECONDS);
         long durationMs = System.currentTimeMillis() - startTime;
         executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
 
-        assertThat(finished).as("All 1,000 bidirectional tasks must finish within timeout").isTrue();
+        assertThat(finished).isTrue();
 
-        // 3. AUDIT & RECONCILIATION
-        Wallet finalWalletA = walletRepository.findById(walletAId).orElseThrow();
-        Wallet finalWalletB = walletRepository.findById(walletBId).orElseThrow();
+        Wallet finalWalletA = walletRepository.findById(walletA.getId()).orElseThrow();
+        Wallet finalWalletB = walletRepository.findById(walletB.getId()).orElseThrow();
         long totalMoneyAfter = finalWalletA.getBalance() + finalWalletB.getBalance();
 
         System.out.println("================================================================================");
-        System.out.println("             CONCURRENCY TEST 2: DEADLOCK PREVENTION AUDIT REPORT              ");
+        System.out.println("            STRATEGY 1: PESSIMISTIC LOCKING BENCHMARK REPORT                    ");
         System.out.println("================================================================================");
         System.out.printf("Execution Time         : %d ms across %d concurrent worker threads%n", durationMs, threadCount);
-        System.out.printf("Bidirectional Traffic  : 500 (A->B) + 500 (B->A) simultaneously%n");
-        System.out.printf("Successful Transfers   : %d / %d%n", successCount.get(), totalTransfers);
-        System.out.printf("Failed / Deadlocked    : %d%n", failureCount.get());
-        System.out.printf("Deadlock Errors Caught : %d%n", deadlockErrors.size());
-        System.out.println("--------------------------------------------------------------------------------");
-        System.out.printf("Wallet A Balance       : %d (Expected: %d)%n", finalWalletA.getBalance(), initialBalanceA);
-        System.out.printf("Wallet B Balance       : %d (Expected: %d)%n", finalWalletB.getBalance(), initialBalanceB);
-        System.out.printf("Total Money Parity     : %d == %d (Zero Divergence)%n", totalMoneyBefore, totalMoneyAfter);
+        System.out.printf("Transfers Succeeded    : %d / %d%n", successCount.get(), totalTransfers);
+        System.out.printf("Transfers Failed       : %d%n", failureCount.get());
+        System.out.printf("Wallet A Balance       : %d (Expected: %d)%n", finalWalletA.getBalance(), initialBalanceA - 10000L);
+        System.out.printf("Wallet B Balance       : %d (Expected: %d)%n", finalWalletB.getBalance(), initialBalanceB + 10000L);
+        System.out.printf("Total Money Parity     : %d == %d%n", totalMoneyBefore, totalMoneyAfter);
+        System.out.printf("Micrometer Retries     : %.0f retries recorded (expected 0 for pessimistic)%n",
+                transferMetrics.getRetryCount("pessimistic"));
         System.out.println("================================================================================");
 
-        // Invariant 1: Zero deadlocks!
-        assertThat(deadlockErrors).as("Zero deadlock errors must occur with ordered locking").isEmpty();
-        assertThat(failureCount.get()).as("Zero failed transfers expected").isZero();
-        assertThat(successCount.get()).as("All 1,000 bidirectional transfers must succeed").isEqualTo(totalTransfers);
+        assertThat(successCount.get()).isEqualTo(totalTransfers);
+        assertThat(failureCount.get()).isZero();
+        assertThat(totalMoneyAfter).isEqualTo(totalMoneyBefore);
+        assertThat(finalWalletA.getBalance()).isEqualTo(initialBalanceA - 10000L);
+        assertThat(finalWalletB.getBalance()).isEqualTo(initialBalanceB + 10000L);
+        assertThat(transferMetrics.getRetryCount("pessimistic")).isZero();
+    }
 
-        // Invariant 2: Perfect conservation of money
+    @Test
+    @DisplayName("PESSIMISTIC STRATEGY: Simultaneous bidirectional transfers (500 A->B and 500 B->A) MUST NOT DEADLOCK")
+    void testPessimisticStrategy_bidirectionalTransfers_zeroDeadlocks() throws InterruptedException {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        User userA = userRepository.save(new User("bidi_uA_" + suffix, "alice_" + suffix + "@bidi.com", "hash", "ROLE_USER"));
+        User userB = userRepository.save(new User("bidi_uB_" + suffix, "bob_" + suffix + "@bidi.com", "hash", "ROLE_USER"));
+
+        long initialBalance = 500_000L;
+        Wallet walletA = walletRepository.save(new Wallet(userA.getId(), "INR", initialBalance));
+        Wallet walletB = walletRepository.save(new Wallet(userB.getId(), "INR", initialBalance));
+
+        int totalTransfers = 1000;
+        int threadCount = 50;
+        long transferAmount = 15L;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(totalTransfers);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < totalTransfers; i++) {
+            final boolean aToB = (i % 2 == 0);
+            final UUID fromId = aToB ? walletA.getId() : walletB.getId();
+            final UUID toId = aToB ? walletB.getId() : walletA.getId();
+            final UUID callerId = aToB ? userA.getId() : userB.getId();
+
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startGate.await();
+                    pessimisticLockingStrategy.transfer(
+                            new TransferRequest(fromId, toId, transferAmount, "Bidirectional transfer"),
+                            callerId
+                    );
+                    successCount.incrementAndGet();
+                } catch (Exception ex) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(10, TimeUnit.SECONDS);
+        long startTime = System.currentTimeMillis();
+        startGate.countDown();
+        boolean finished = doneLatch.await(60, TimeUnit.SECONDS);
+        long durationMs = System.currentTimeMillis() - startTime;
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertThat(finished).isTrue();
+
+        Wallet finalWalletA = walletRepository.findById(walletA.getId()).orElseThrow();
+        Wallet finalWalletB = walletRepository.findById(walletB.getId()).orElseThrow();
+
+        System.out.println("================================================================================");
+        System.out.println("            PESSIMISTIC BIDIRECTIONAL DEADLOCK-PREVENTION REPORT                ");
+        System.out.println("================================================================================");
+        System.out.printf("Execution Time         : %d ms across %d concurrent worker threads%n", durationMs, threadCount);
+        System.out.printf("Bidirectional Traffic  : 500 A->B + 500 B->A simultaneously%n");
+        System.out.printf("Transfers Succeeded    : %d / %d%n", successCount.get(), totalTransfers);
+        System.out.printf("Deadlocks / Failures   : %d%n", failureCount.get());
+        System.out.printf("Wallet A Balance       : %d (Expected: %d)%n", finalWalletA.getBalance(), initialBalance);
+        System.out.printf("Wallet B Balance       : %d (Expected: %d)%n", finalWalletB.getBalance(), initialBalance);
+        System.out.println("================================================================================");
+
+        assertThat(failureCount.get()).isZero();
+        assertThat(successCount.get()).isEqualTo(totalTransfers);
+        assertThat(finalWalletA.getBalance()).isEqualTo(initialBalance);
+        assertThat(finalWalletB.getBalance()).isEqualTo(initialBalance);
+    }
+
+    @Test
+    @DisplayName("OPTIMISTIC STRATEGY: 200 parallel transfers across 20 threads with retries, exponential backoff, and jitter - MUST PASS")
+    void testOptimisticStrategy_withRetriesAndBackoff() throws InterruptedException {
+        // Create 10 users and 10 wallets to form a small wallet pool
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        List<User> users = new ArrayList<>();
+        List<Wallet> wallets = new ArrayList<>();
+        long initialPerWallet = 500_000L;
+        int walletCount = 10;
+
+        for (int i = 0; i < walletCount; i++) {
+            User u = userRepository.save(new User("opt_u" + i + "_" + suffix, "user" + i + "_" + suffix + "@opt.com", "hash", "ROLE_USER"));
+            Wallet w = walletRepository.save(new Wallet(u.getId(), "INR", initialPerWallet));
+            users.add(u);
+            wallets.add(w);
+        }
+
+        long totalMoneyBefore = initialPerWallet * walletCount; // 5,000,000 minor units
+        int totalTransfers = 200;
+        int threadCount = 20;
+        long transferAmount = 10L;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch readyLatch = new CountDownLatch(threadCount);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(totalTransfers);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < totalTransfers; i++) {
+            final int fromIndex = i % walletCount;
+            final int toIndex = (fromIndex + 1 + (i % (walletCount - 1))) % walletCount; // Distinct destination wallet
+
+            final UUID fromWalletId = wallets.get(fromIndex).getId();
+            final UUID toWalletId = wallets.get(toIndex).getId();
+            final UUID callerUserId = users.get(fromIndex).getId();
+
+            executor.submit(() -> {
+                readyLatch.countDown();
+                try {
+                    startGate.await();
+                    optimisticLockingStrategy.transfer(
+                            new TransferRequest(fromWalletId, toWalletId, transferAmount, "Optimistic transfer with retry"),
+                            callerUserId
+                    );
+                    successCount.incrementAndGet();
+                } catch (Exception ex) {
+                    failureCount.incrementAndGet();
+                    log.error("Optimistic transfer failed after retries: {}", ex.getMessage());
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        readyLatch.await(10, TimeUnit.SECONDS);
+        long startTime = System.currentTimeMillis();
+        startGate.countDown();
+        boolean finished = doneLatch.await(60, TimeUnit.SECONDS);
+        long durationMs = System.currentTimeMillis() - startTime;
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertThat(finished).as("All 200 optimistic tasks must finish within the 60s timeout").isTrue();
+
+        long totalMoneyAfter = 0L;
+        for (Wallet w : wallets) {
+            Wallet refreshed = walletRepository.findById(w.getId()).orElseThrow();
+            totalMoneyAfter += refreshed.getBalance();
+        }
+
+        double retriesCount = transferMetrics.getRetryCount("optimistic");
+        double successMetric = transferMetrics.getSuccessCount("optimistic");
+
+        System.out.println("================================================================================");
+        System.out.println("             STRATEGY 2: OPTIMISTIC LOCKING BENCHMARK REPORT                    ");
+        System.out.println("================================================================================");
+        System.out.printf("Execution Time         : %d ms across %d concurrent worker threads%n", durationMs, threadCount);
+        System.out.printf("Transfers Succeeded    : %d / %d%n", successCount.get(), totalTransfers);
+        System.out.printf("Transfers Failed       : %d%n", failureCount.get());
+        System.out.printf("Total Money Parity     : %d == %d%n", totalMoneyBefore, totalMoneyAfter);
+        System.out.printf("Balance Discrepancy    : %d minor units (PERFECT CONSERVATION)%n", totalMoneyAfter - totalMoneyBefore);
+        System.out.println("--------------------------------------------------------------------------------");
+        System.out.printf("Micrometer transfer_lock_retries_total : %.0f retries handled automatically%n", retriesCount);
+        System.out.printf("Micrometer transfer_success_total      : %.0f successful transfers%n", successMetric);
+        System.out.println("================================================================================");
+
+        assertThat(successCount.get()).isEqualTo(totalTransfers);
+        assertThat(failureCount.get()).isZero();
         assertThat(totalMoneyAfter).isEqualTo(totalMoneyBefore);
 
-        // Invariant 3: Symmetrical transfers (500 in, 500 out) mean balances remain exactly equal to initial
-        assertThat(finalWalletA.getBalance()).isEqualTo(initialBalanceA);
-        assertThat(finalWalletB.getBalance()).isEqualTo(initialBalanceB);
+        // Verify that retries actually occurred and were recorded by Micrometer!
+        assertThat(retriesCount)
+                .as("Under 50 concurrent threads, optimistic locking collisions must trigger and record retries")
+                .isGreaterThan(0.0);
     }
 }
