@@ -12,6 +12,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TransferPage } from '@/pages/TransferPage';
+import { TransactionsPage } from '@/pages/TransactionsPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 
 const queryClient = new QueryClient({
@@ -70,16 +71,7 @@ function AppRoutes() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/transfer" element={<TransferPage />} />
-          <Route
-            path="/transactions"
-            element={
-              <PlaceholderPage
-                pageTitle="Transactions Ledger"
-                pageStep="Page 5 Target"
-                description="Server-side pagination, type/status/date/amount filters, color-coded +/- indicators, row-click detail drawer, CSV export, and skeleton loaders."
-              />
-            }
-          />
+          <Route path="/transactions" element={<TransactionsPage />} />
           <Route
             path="/notifications"
             element={
