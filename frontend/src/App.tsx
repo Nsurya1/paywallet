@@ -11,6 +11,7 @@ import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { TransferPage } from '@/pages/TransferPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 
 const queryClient = new QueryClient({
@@ -68,16 +69,7 @@ function AppRoutes() {
         >
           <Route path="/" element={<DashboardPage />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
-          <Route
-            path="/transfer"
-            element={
-              <PlaceholderPage
-                pageTitle="Transfer Flow"
-                pageStep="Page 4 Target"
-                description="3-step transfer flow: recipient avatars, balance check, review & confirm, UUID Idempotency-Key retry reuse, 409/422 guards, and animated PDF receipt."
-              />
-            }
-          />
+          <Route path="/transfer" element={<TransferPage />} />
           <Route
             path="/transactions"
             element={
