@@ -16,6 +16,22 @@ export function formatPaiseToRupees(paise: number | null | undefined, currency: 
 }
 
 /**
+ * Formats a major currency unit number (rupees) to Indian Rupee string (₹).
+ * E.g., 125000.5 -> "₹1,25,000.50"
+ */
+export function formatRupees(rupees: number | null | undefined, currency: string = 'INR'): string {
+  if (rupees === null || rupees === undefined || isNaN(rupees)) {
+    return '₹0.00';
+  }
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: currency || 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(rupees));
+}
+
+/**
  * Converts user input rupees to minor currency units (paise).
  * E.g., "125000.50" -> 12500050
  */
@@ -31,4 +47,11 @@ export function rupeesToPaise(rupees: string | number | null | undefined): numbe
 export function paiseToRupeesNumber(paise: number | null | undefined): number {
   if (!paise || isNaN(paise)) return 0;
   return Number(paise) / 100;
+}
+
+/**
+ * Alias for paiseToRupeesNumber
+ */
+export function paiseToRupees(paise: number | null | undefined): number {
+  return paiseToRupeesNumber(paise);
 }

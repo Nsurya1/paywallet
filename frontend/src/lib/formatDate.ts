@@ -28,3 +28,5 @@ export function formatRelativeTime(isoString: string | null | undefined): string
   if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
   return formatTimestamp(isoString);
 }
+
+export const formatDate = formatTimestamp;

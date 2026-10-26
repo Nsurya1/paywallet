@@ -4,7 +4,7 @@ import { Button } from './Button';
 import { cn } from '@/lib/utils';
 
 export interface EmptyStateProps {
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.ReactNode;
   title: string;
   description: string;
   actionLabel?: string;
@@ -20,6 +20,8 @@ export function EmptyState({
   onAction,
   className,
 }: EmptyStateProps) {
+  const isElement = React.isValidElement(Icon);
+
   return (
     <div
       className={cn(
@@ -28,7 +30,13 @@ export function EmptyState({
       )}
     >
       <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground mb-4">
-        <Icon className="w-7 h-7" />
+        {isElement ? (
+          Icon
+        ) : (
+          React.createElement(Icon as React.ComponentType<{ className?: string }>, {
+            className: 'w-7 h-7',
+          })
+        )}
       </div>
       <h3 className="text-base font-bold text-foreground mb-1">{title}</h3>
       <p className="text-sm text-muted-foreground max-w-sm mb-5 leading-relaxed">

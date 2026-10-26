@@ -10,6 +10,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { DashboardPage } from '@/pages/DashboardPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 
 const queryClient = new QueryClient({
@@ -65,16 +66,8 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         >
-          <Route
-            path="/"
-            element={
-              <PlaceholderPage
-                pageTitle="Dashboard"
-                pageStep="Page 2 Target"
-                description="Greeting, hero wallet card with glass effect, count-up balance, quick actions (Add Money, Send, Request), spending charts, and recent transactions."
-              />
-            }
-          />
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route
             path="/transfer"
             element={
