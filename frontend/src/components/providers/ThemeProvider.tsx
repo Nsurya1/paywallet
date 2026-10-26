@@ -12,6 +12,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof localStorage === 'undefined') return 'system';
     const saved = localStorage.getItem('paywallet_theme');
     if (saved === 'light' || saved === 'dark' || saved === 'system') {
       return saved;
@@ -20,18 +21,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
       setSystemIsDark(e.matches);
     };
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
   }, []);
 
   const resolvedTheme: 'light' | 'dark' = useMemo(() => {
@@ -42,6 +49,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme, systemIsDark]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
     if (resolvedTheme === 'dark') {
       root.classList.add('dark');
@@ -52,7 +60,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem('paywallet_theme', newTheme);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('paywallet_theme', newTheme);
+    }
   };
 
   const toggleTheme = () => {
