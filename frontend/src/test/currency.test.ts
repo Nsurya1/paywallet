@@ -1,17 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { formatPaiseToRupees, rupeesToPaise } from '../utils/currency';
+import { formatPaiseToRupees, rupeesToPaise } from '../lib/currency';
 
 describe('currency utils', () => {
   describe('formatPaiseToRupees', () => {
-    it('formats 100000 paise to ₹1,000.00', () => {
-      const result = formatPaiseToRupees(100000);
-      // Clean non-breaking space / currency symbols for stable assertions across locales
-      expect(result).toMatch(/₹\s?1,000\.00/);
+    it('formats 12500050 paise to ₹1,25,000.50 with Indian locale format', () => {
+      const result = formatPaiseToRupees(12500050);
+      expect(result).toMatch(/₹\s?1,25,000\.50/);
     });
 
-    it('formats 25050 paise to ₹250.50', () => {
-      const result = formatPaiseToRupees(25050);
-      expect(result).toMatch(/₹\s?250\.50/);
+    it('formats 100000 paise to ₹1,000.00', () => {
+      const result = formatPaiseToRupees(100000);
+      expect(result).toMatch(/₹\s?1,000\.00/);
     });
 
     it('formats 0 paise to ₹0.00', () => {
@@ -28,6 +27,7 @@ describe('currency utils', () => {
 
   describe('rupeesToPaise', () => {
     it('converts decimal rupee string to integer paise', () => {
+      expect(rupeesToPaise('125000.50')).toBe(12500050);
       expect(rupeesToPaise('250.50')).toBe(25050);
       expect(rupeesToPaise('100')).toBe(10000);
       expect(rupeesToPaise('0.05')).toBe(5);
