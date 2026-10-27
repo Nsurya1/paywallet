@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
@@ -17,7 +17,7 @@ const registerSchema = z
       .string()
       .min(3, 'Username must be at least 3 characters')
       .max(30, 'Username cannot exceed 30 characters')
-      .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores')
+      .regex(/^[a-zA-Z0-9._-]+$/, 'Username can only contain letters, numbers, dots, underscores, and hyphens')
       .trim(),
     email: z.string().email('Please enter a valid email address').trim(),
     password: z
@@ -26,7 +26,7 @@ const registerSchema = z
       .regex(/[0-9]/, 'Password must contain at least one number')
       .regex(/[a-zA-Z]/, 'Password must contain at least one letter'),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
-    agreeTerms: z.literal(true, {
+    agreeTerms: z.boolean().refine((val) => val === true, {
       message: 'You must accept the terms of service',
     }),
   })
@@ -49,6 +49,7 @@ export function RegisterPage() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -63,6 +64,15 @@ export function RegisterPage() {
 
   const passwordValue = watch('password', '');
 
+  const handleAutoFillNewAccount = () => {
+    const suffix = Math.floor(1000 + Math.random() * 9000);
+    setValue('username', `user_${suffix}`, { shouldValidate: true });
+    setValue('email', `user_${suffix}@paywallet.io`, { shouldValidate: true });
+    setValue('password', 'Password123!', { shouldValidate: true });
+    setValue('confirmPassword', 'Password123!', { shouldValidate: true });
+    setValue('agreeTerms', true, { shouldValidate: true });
+  };
+
   const onSubmit = async (data: RegisterFormData) => {
     setServerError(null);
     try {
@@ -72,8 +82,10 @@ export function RegisterPage() {
     } catch (err: unknown) {
       let message = 'Failed to create account. Please check your details.';
       if (err && typeof err === 'object' && 'response' in err) {
-        const responseData = (err as { response?: { data?: { message?: string } } }).response?.data;
-        if (responseData?.message) {
+        const responseData = (err as { response?: { data?: { message?: string; errors?: { message: string }[] } } }).response?.data;
+        if (responseData?.errors && responseData.errors.length > 0) {
+          message = responseData.errors.map((e) => e.message).join('. ');
+        } else if (responseData?.message) {
           message = responseData.message;
         }
       }
@@ -197,6 +209,18 @@ export function RegisterPage() {
           <span>Create Account</span>
           <ArrowRight className="w-4 h-4" />
         </Button>
+
+        {/* Auto-fill Quick Test Account */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={handleAutoFillNewAccount}
+            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-primary/30 hover:border-primary/60 bg-primary/5 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Generate Random Test Account</span>
+          </button>
+        </div>
 
         {/* Sign In Link */}
         <div className="text-center text-xs text-muted-foreground pt-3">

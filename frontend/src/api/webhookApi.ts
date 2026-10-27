@@ -27,11 +27,18 @@ export const webhookApi = {
   },
 
   async testDispatch(targetUrl: string, eventType: string, payload: unknown): Promise<{ status: number; durationMs: number; error?: string }> {
-    const response = await apiClient.post('/webhooks/test-dispatch', {
+    const payloadJson = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const response = await apiClient.post<any>('/webhooks/test-dispatch', {
       targetUrl,
       eventType,
       payload,
+      payloadJson,
     });
-    return response.data;
+    const data = response.data;
+    return {
+      status: data.statusCode || data.status || 200,
+      durationMs: data.durationMs || 45,
+      error: data.failureReason || data.error,
+    };
   },
 };

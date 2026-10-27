@@ -39,25 +39,65 @@ export const walletApi = {
       headers['Idempotency-Key'] = idempotencyKey;
     }
 
-    const response = await apiClient.post<TopUpResponse>(
+    const response = await apiClient.post<any>(
       `/wallets/${walletId}/topup`,
       {
         amount: amountPaise,
+        paymentMethod: 'UPI',
         paymentGatewayRef: paymentGatewayRef || `GATEWAY-${Date.now()}`,
       },
       { headers }
     );
-    return response.data;
+    const data = response.data;
+    return {
+      transactionId: data.transactionId || data.id,
+      walletId: data.walletId || walletId,
+      amount: data.creditedAmount || data.amount || amountPaise,
+      balanceAfter: data.newBalance ?? data.balanceAfter ?? amountPaise,
+      reference: data.referenceId || data.reference || 'Wallet Top-Up',
+      status: 'COMPLETED',
+      createdAt: data.timestamp || data.createdAt || new Date().toISOString(),
+    };
   },
 
   async getTransactions(
     walletId: string,
     params: TransactionQueryParams = {}
   ): Promise<PaginatedResponse<Transaction>> {
-    const response = await apiClient.get<PaginatedResponse<Transaction>>(
+    const response = await apiClient.get<any>(
       `/wallets/${walletId}/transactions`,
       { params }
     );
-    return response.data;
+    const data = response.data;
+    if (data && Array.isArray(data.content)) {
+      const mappedContent = data.content.map((tx: any) => {
+        const isDebit = tx.fromWalletId === walletId;
+        const resolvedType =
+          tx.type === 'TOPUP' || tx.type === 'DEPOSIT'
+            ? 'TOPUP'
+            : isDebit
+            ? 'TRANSFER_DEBIT'
+            : 'TRANSFER_CREDIT';
+        return {
+          id: tx.id || tx.transactionId,
+          walletId: isDebit ? tx.fromWalletId : (tx.toWalletId || walletId),
+          relatedWalletId: isDebit ? tx.toWalletId : tx.fromWalletId,
+          type:
+            tx.type === 'TRANSFER_DEBIT' || tx.type === 'TRANSFER_CREDIT' || tx.type === 'TOPUP'
+              ? tx.type
+              : resolvedType,
+          amount: tx.amount,
+          balanceAfter: tx.balanceAfter ?? tx.amount,
+          reference: tx.referenceId || tx.reference || tx.description || 'Transfer',
+          status: tx.status || 'COMPLETED',
+          createdAt: tx.createdAt,
+        };
+      });
+      return {
+        ...data,
+        content: mappedContent,
+      };
+    }
+    return data;
   },
 };

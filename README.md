@@ -145,10 +145,61 @@ npm run dev
 
 ### 4. Verify Health & Developer Portals
 - **Frontend SPA**: [http://localhost:5173](http://localhost:5173)
+  - **Quick Demo Login**: Click **"Auto-fill Demo Account (rahul)"** on `/login` (`rahul` / `Password123!`) — pre-loaded with ₹1,25,000.50 wallet funds.
+  - **New Account Creation**: Click **"Generate Random Test Account"** on `/register` for 1-click test user creation.
 - **OpenAPI Swagger UI**: [http://localhost:8085/swagger-ui.html](http://localhost:8085/swagger-ui.html)
 - **Prometheus Metrics**: [http://localhost:8085/actuator/prometheus](http://localhost:8085/actuator/prometheus)
 - **Grafana Dashboard**: [http://localhost:3001](http://localhost:3001) (`admin` / `admin`)
   - Auto-provisioned: **PayWallet - High-Concurrency Ledger & Observability**
+
+---
+
+## ☁️ 100% Free Cloud Deployment Guide
+
+You can deploy the complete PayWallet full-stack platform online for free without providing credit card details using the following battle-tested free-tier providers:
+
+### Architecture Map for Free Deployment
+```mermaid
+flowchart LR
+    Browser["User Browser"] -->|HTTPS| Vercel["Frontend on Vercel / Netlify<br/>(100% Free Static Hosting)"]
+    Vercel -->|REST API| Render["Backend on Render / Koyeb<br/>(Free Web Service)"]
+    Render --> Neon[("Neon.tech / Supabase<br/>(Free Serverless PostgreSQL 16)")]
+    Render --> UpstashRedis[("Upstash Redis<br/>(Free Serverless Redis 10k cmds/day)")]
+    Render --> UpstashKafka[("Upstash Kafka<br/>(Free Serverless Kafka)")]
+```
+
+### 1. Frontend Hosting (Free Forever)
+- **Recommended**: [Vercel](https://vercel.com/) or [Netlify](https://www.netlify.com/)
+  1. Push your repository to GitHub.
+  2. Import the repo in Vercel.
+  3. Set **Root Directory** to `frontend`.
+  4. Build command: `npm run build` | Output directory: `dist`.
+  5. Add Environment Variable:
+     - `VITE_API_BASE_URL` = your live backend URL (e.g. `https://paywallet-api.onrender.com`).
+
+### 2. Backend Hosting (Free Web Service)
+- **Recommended**: [Render](https://render.com/) or [Koyeb](https://www.koyeb.com/)
+  1. Create a **New Web Service** from your GitHub repo.
+  2. Set **Root Directory** to `backend`.
+  3. Environment: `Docker` (using `backend/Dockerfile`) or `Java 21`.
+  4. Build Command: `./mvnw clean package -DskipTests`
+  5. Start Command: `java -jar target/paywallet-0.0.1-SNAPSHOT.jar`
+  6. Add Environment Variables:
+     - `SPRING_PROFILES_ACTIVE`: `prod`
+     - `SERVER_PORT`: `8080`
+     - `SPRING_DATASOURCE_URL`: JDBC URL from Neon/Supabase (below)
+     - `SPRING_DATA_REDIS_HOST` & `PORT`: Host/Port from Upstash Redis (below)
+     - `SPRING_KAFKA_BOOTSTRAP_SERVERS`: Host/Port from Upstash Kafka (below)
+
+### 3. Managed PostgreSQL (Free Serverless Database)
+- **Recommended**: [Neon.tech](https://neon.tech/) or [Supabase](https://supabase.com/)
+  - **Neon**: Free 0.5 GB storage, autoscaling PostgreSQL 16.
+  - Copy the connection string (with pooled mode for serverless) and set it as `SPRING_DATASOURCE_URL` in your backend.
+
+### 4. Managed Redis & Kafka (Free Serverless)
+- **Recommended**: [Upstash](https://upstash.com/)
+  - **Upstash Redis**: 10,000 commands/day free. Copy the host, port, and password to Spring Boot config.
+  - **Upstash Kafka**: 10,000 messages/day free. Copy the SASL/SSL bootstrap servers to Spring Boot config.
 
 ---
 

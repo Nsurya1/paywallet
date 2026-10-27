@@ -14,16 +14,27 @@ export const transferApi = {
       headers['Idempotency-Key'] = idempotencyKey;
     }
 
-    const response = await apiClient.post<TransferResponse>(
+    const response = await apiClient.post<any>(
       '/transfers',
       {
         fromWalletId,
         toWalletId,
         amount: amountPaise,
+        description: reference || null,
         reference: reference || null,
       },
       { headers }
     );
-    return response.data;
+    const data = response.data;
+    return {
+      transferId: data.transactionId || data.transferId || data.id,
+      fromWalletId: data.fromWalletId,
+      toWalletId: data.toWalletId,
+      amount: data.amount,
+      currency: data.currency || 'INR',
+      reference: data.reference || data.referenceId || data.description || 'Transfer',
+      status: data.status || 'COMPLETED',
+      createdAt: data.createdAt || new Date().toISOString(),
+    };
   },
 };
