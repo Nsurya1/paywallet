@@ -120,16 +120,9 @@ export function TransferPage() {
         setWallet(created);
       }
     } catch (err) {
-      console.warn('API error fetching wallet, using fallback state:', err);
-      setWallet({
-        id: 'wal_primary_user',
-        userId: user?.id || 'usr_demo',
-        currency: 'INR',
-        balance: 12500050, // ₹1,25,000.50
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+      console.error('API error fetching wallet:', err);
+      toast.error('Could not load wallet from server.');
+      setWallet(null);
     } finally {
       setLoadingWallet(false);
     }

@@ -54,17 +54,9 @@ export function DashboardPage() {
         toast.success('Initialized primary INR wallet for your account');
       }
     } catch (err: unknown) {
-      console.warn('Could not load wallet from API, using simulated state:', err);
-      // Fallback fallback wallet so user is never blocked
-      setWallet({
-        id: 'wal_8f3a921d04e',
-        userId: user?.id || 'usr_demo',
-        currency: 'INR',
-        balance: 12500050, // ₹1,25,000.50
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+      console.error('Could not load wallet from API:', err);
+      toast.error('Could not load wallet from server.');
+      setWallet(null);
     } finally {
       setLoadingWallet(false);
     }
@@ -79,64 +71,8 @@ export function DashboardPage() {
         setTransactions(data.content);
       }
     } catch (err: unknown) {
-      console.warn('Could not load transactions from API, using demo ledger history:', err);
-      // Fallback demo ledger data
-      setTransactions([
-        {
-          id: 'tx_01hk87f1',
-          walletId,
-          relatedWalletId: 'wal_7b19a42f',
-          type: 'TRANSFER_CREDIT',
-          amount: 250000, // ₹2,500.00
-          balanceAfter: 12500050,
-          status: 'COMPLETED',
-          reference: 'Project Milestone Bonus',
-          createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-        },
-        {
-          id: 'tx_01hk87e2',
-          walletId,
-          relatedWalletId: 'wal_92c43110',
-          type: 'TRANSFER_DEBIT',
-          amount: 85000, // ₹850.00
-          balanceAfter: 12250050,
-          status: 'COMPLETED',
-          reference: 'Dinner Split & Drinks',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        },
-        {
-          id: 'tx_01hk87d3',
-          walletId,
-          type: 'TOPUP',
-          amount: 1000000, // ₹10,000.00
-          balanceAfter: 12335050,
-          status: 'COMPLETED',
-          reference: 'UPI Instant Top-Up',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        },
-        {
-          id: 'tx_01hk87c4',
-          walletId,
-          relatedWalletId: 'wal_14a0982e',
-          type: 'TRANSFER_DEBIT',
-          amount: 320000, // ₹3,200.00
-          balanceAfter: 11335050,
-          status: 'COMPLETED',
-          reference: 'AWS Cloud Hosting Bill',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-        },
-        {
-          id: 'tx_01hk87b5',
-          walletId,
-          relatedWalletId: 'wal_38f1720a',
-          type: 'TRANSFER_CREDIT',
-          amount: 500000, // ₹5,000.00
-          balanceAfter: 11655050,
-          status: 'COMPLETED',
-          reference: 'Freelance Design Retainer',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-        },
-      ]);
+      console.error('Could not load transactions from API:', err);
+      setTransactions([]);
     } finally {
       setLoadingTx(false);
     }

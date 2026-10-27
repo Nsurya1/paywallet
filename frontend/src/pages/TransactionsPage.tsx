@@ -58,16 +58,8 @@ export function TransactionsPage() {
         setWallet(created);
       }
     } catch (err) {
-      console.warn('API error fetching wallet:', err);
-      setWallet({
-        id: 'wal_primary_user',
-        userId: user?.id || 'usr_demo',
-        currency: 'INR',
-        balance: 12500050,
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+      console.error('API error fetching wallet:', err);
+      toast.error('Could not load wallet details.');
     } finally {
       setLoadingWallet(false);
     }
@@ -115,97 +107,11 @@ export function TransactionsPage() {
         setTotalPages(data.totalPages ?? Math.ceil(items.length / pageSize));
       }
     } catch (err) {
-      console.warn('API error loading transactions, falling back to mock ledger items:', err);
-
-      // Robust mock dataset for offline/mock development
-      const mockItems: Transaction[] = [
-        {
-          id: 'tx_01hk87f1',
-          walletId: wallet.id,
-          relatedWalletId: 'wal_7b19a42f',
-          type: 'TRANSFER_CREDIT',
-          amount: 250000,
-          balanceAfter: 12500050,
-          status: 'COMPLETED',
-          reference: 'Project Milestone Bonus',
-          createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-        },
-        {
-          id: 'tx_01hk87e2',
-          walletId: wallet.id,
-          relatedWalletId: 'wal_92c43110',
-          type: 'TRANSFER_DEBIT',
-          amount: 85000,
-          balanceAfter: 12250050,
-          status: 'COMPLETED',
-          reference: 'Dinner Split & Drinks',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-        },
-        {
-          id: 'tx_01hk87d3',
-          walletId: wallet.id,
-          type: 'TOPUP',
-          amount: 1000000,
-          balanceAfter: 12335050,
-          status: 'COMPLETED',
-          reference: 'UPI Instant Top-Up',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        },
-        {
-          id: 'tx_01hk87c4',
-          walletId: wallet.id,
-          relatedWalletId: 'wal_14a0982e',
-          type: 'TRANSFER_DEBIT',
-          amount: 320000,
-          balanceAfter: 11335050,
-          status: 'COMPLETED',
-          reference: 'AWS Cloud Hosting Bill',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-        },
-        {
-          id: 'tx_01hk87b5',
-          walletId: wallet.id,
-          relatedWalletId: 'wal_38f1720a',
-          type: 'TRANSFER_CREDIT',
-          amount: 500000,
-          balanceAfter: 11655050,
-          status: 'COMPLETED',
-          reference: 'Freelance Design Retainer',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-        },
-        {
-          id: 'tx_01hk87a6',
-          walletId: wallet.id,
-          relatedWalletId: 'wal_99e4100b',
-          type: 'TRANSFER_DEBIT',
-          amount: 150000,
-          balanceAfter: 11155050,
-          status: 'PENDING',
-          reference: 'Rent Advance Deposit',
-          createdAt: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(),
-        },
-      ];
-
-      let filtered = mockItems;
-
-      if (filters.type) {
-        filtered = filtered.filter((tx) => tx.type === filters.type);
-      }
-      if (filters.status) {
-        filtered = filtered.filter((tx) => tx.status === filters.status);
-      }
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        filtered = filtered.filter(
-          (tx) =>
-            tx.id.toLowerCase().includes(q) ||
-            (tx.reference && tx.reference.toLowerCase().includes(q))
-        );
-      }
-
-      setTransactions(filtered);
-      setTotalElements(filtered.length);
-      setTotalPages(Math.ceil(filtered.length / pageSize) || 1);
+      console.error('API error loading transactions:', err);
+      setTransactions([]);
+      setTotalElements(0);
+      setTotalPages(0);
+      toast.error('Failed to load transaction history from the ledger.');
     } finally {
       setIsLoadingTx(false);
     }

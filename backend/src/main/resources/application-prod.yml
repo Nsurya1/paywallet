@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+  data:
+    redis:
+      url: ${REDIS_URL}          # e.g. rediss://default:PASSWORD@host:6379
+      timeout: 2000ms
+      repositories:
+        enabled: false
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+paywallet:
+  jwt:
+    secret: ${PAYWALLET_JWT_SECRET}      # no default: app must fail if missing
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  outbox:
+    publisher:
+      enabled: ${OUTBOX_ENABLED:false}
+  kafka:
+    consumer:
+      enabled: ${KAFKA_CONSUMER_ENABLED:false}
+      auto-startup: ${KAFKA_CONSUMER_ENABLED:false}
+
+management:
+  endpoint:
+    health:
+      show-details: never
