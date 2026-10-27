@@ -13,7 +13,8 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TransferPage } from '@/pages/TransferPage';
 import { TransactionsPage } from '@/pages/TransactionsPage';
-import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,26 +73,8 @@ function AppRoutes() {
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/transfer" element={<TransferPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
-          <Route
-            path="/notifications"
-            element={
-              <PlaceholderPage
-                pageTitle="Notifications & Events"
-                pageStep="Page 6 Target"
-                description="Unread dots, mark all read, filters, webhook subscription URL manager, and live test dispatcher."
-              />
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <PlaceholderPage
-                pageTitle="Settings & Preferences"
-                pageStep="Page 6 Target"
-                description="User profile, change password, theme choices (light/dark/system), webhook endpoints, and active session audit."
-              />
-            }
-          />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       ) : (
         <Route path="/" element={<LandingPage />} />
